@@ -1,0 +1,53 @@
+{
+  "name": "omegafetch",
+  "version": "0.1.0",
+  "description": "MCP tool that fetches pages AI chatbots normally can't reach — runs a real browser bridge on your own device to get past JS rendering, anti-bot walls, and logins.",
+  "type": "module",
+  "bin": {
+    "omegafetch": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vibeDN/OmegaFetch.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "browser",
+    "scraping",
+    "fetch",
+    "playwright"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vibeDN/OmegaFetch/issues"
+  },
+  "homepage": "https://github.com/vibeDN/OmegaFetch#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^25.0.1",
+    "playwright": "^1.48.0",
+    "turndown": "^7.2.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.9.0",
+    "@types/turndown": "^5.0.5",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
