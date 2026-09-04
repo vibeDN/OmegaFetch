@@ -1,12 +1,8 @@
 import express from "express";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import {
-  getOAuthProtectedResourceMetadataUrl,
-  mcpAuthRouter,
-} from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
-import { OmegaFetchAuthProvider } from "./auth/provider.js";
+import { StaticTokenVerifier } from "./auth/tokenVerifier.js";
 import { buildServer } from "./server.js";
 import { closeBrowserContext } from "./browser.js";
 
@@ -31,44 +27,28 @@ function methodNotAllowed(res: express.Response) {
 }
 
 /**
- * Runs OmegaFetch as a remote (Streamable HTTP) MCP server behind OAuth, so a
- * phone-based MCP client — not just a local desktop process — can reach the
- * browser bridge running on this machine. Meant to sit behind a tunnel
- * (Cloudflare Tunnel, Tailscale Funnel, ...) that terminates TLS and forwards
- * to this port; OmegaFetch itself only speaks plain HTTP on localhost.
+ * Runs OmegaFetch as a remote Streamable HTTP MCP server behind a single
+ * static bearer token — no OAuth flow, no dynamic client registration, no
+ * login page. Meant for personal use: set OMEGAFETCH_TOKEN once and hand
+ * that exact string to whatever client is calling in (e.g. as the Bearer
+ * token / auth header for a custom connector). Meant to sit behind a tunnel
+ * that terminates TLS; OmegaFetch itself only speaks plain HTTP on
+ * localhost.
  */
 export async function startHttpServer(): Promise<void> {
-  const password = requireEnv("OMEGAFETCH_PASSWORD");
-  const publicUrl = new URL(requireEnv("OMEGAFETCH_PUBLIC_URL"));
+  const token = requireEnv("OMEGAFETCH_TOKEN");
   const port = Number(process.env.OMEGAFETCH_PORT ?? 3939);
   const bindHost = process.env.OMEGAFETCH_HOST ?? "127.0.0.1";
-
-  const provider = new OmegaFetchAuthProvider(password);
-  const resourceServerUrl = new URL("/mcp", publicUrl);
+  const allowedHostsEnv = process.env.OMEGAFETCH_ALLOWED_HOSTS;
 
   const app = createMcpExpressApp({
     host: bindHost,
-    allowedHosts: [publicUrl.host, "localhost", "127.0.0.1", `127.0.0.1:${port}`],
+    allowedHosts: allowedHostsEnv
+      ? allowedHostsEnv.split(",").map((h) => h.trim())
+      : ["localhost", "127.0.0.1", `127.0.0.1:${port}`],
   });
 
-  app.use(
-    mcpAuthRouter({
-      provider,
-      issuerUrl: publicUrl,
-      resourceServerUrl,
-      resourceName: "OmegaFetch",
-      scopesSupported: ["mcp"],
-    })
-  );
-
-  app.post("/authorize/confirm", express.urlencoded({ extended: false }), async (req, res) => {
-    await provider.handleLoginSubmit(req.body.pending_id, req.body.password, res);
-  });
-
-  const bearerAuth = requireBearerAuth({
-    verifier: provider,
-    resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceServerUrl),
-  });
+  const bearerAuth = requireBearerAuth({ verifier: new StaticTokenVerifier(token) });
 
   app.post("/mcp", bearerAuth, async (req, res) => {
     const server = buildServer();
@@ -91,8 +71,8 @@ export async function startHttpServer(): Promise<void> {
   app.delete("/mcp", bearerAuth, (_req, res) => methodNotAllowed(res));
 
   app.listen(port, bindHost, () => {
-    console.log(`OmegaFetch listening on http://${bindHost}:${port} (public: ${publicUrl.origin})`);
-    console.log("Point your tunnel at this port; add the public URL as a connector in the Claude app.");
+    console.log(`OmegaFetch listening on http://${bindHost}:${port}/mcp`);
+    console.log("Point your tunnel at this port, and use OMEGAFETCH_TOKEN as the Bearer token in your MCP client.");
   });
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

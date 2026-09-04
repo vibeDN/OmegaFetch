@@ -61,62 +61,65 @@ Or add it directly to your MCP config:
 }
 ```
 
-## Use from a phone (remote / official Claude app)
+## Use from a phone (remote MCP)
 
 The setup above only works with clients that spawn a local process next to
 them (Claude Desktop, Claude Code, Cursor...). A phone app can't do that —
 it needs a URL. OmegaFetch can also run as a **remote MCP server** over
-Streamable HTTP, behind OAuth, so the official Claude mobile app can connect
-to it as a custom connector while the actual browser bridge still runs on
-a machine you control (e.g. a home PC or server that's always on) — not
-some datacenter box, so you keep your real IP and sessions.
+Streamable HTTP, protected by a single static bearer token (no OAuth
+dance, no login page, no dynamic client registration — just a personal
+API key), while the actual browser bridge still runs on a machine you
+control (e.g. a home PC or server that's always on) — not some datacenter
+box, so you keep your real IP and sessions.
 
-**1. Start OmegaFetch in HTTP mode** on the always-on machine:
+**1. Pick a token and start OmegaFetch in HTTP mode** on the always-on
+machine:
 
 ```bash
+# generate one:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
 OMEGAFETCH_TRANSPORT=http \
-OMEGAFETCH_PASSWORD="pick a strong password" \
-OMEGAFETCH_PUBLIC_URL="https://omegafetch.yourdomain.com" \
+OMEGAFETCH_TOKEN="<the token you generated>" \
 node dist/index.js
 ```
 
-`OMEGAFETCH_PUBLIC_URL` must match whatever hostname your tunnel exposes —
-it's used both as the OAuth issuer and to build redirect URLs, so it has to
-be correct before you connect. By default it binds to `127.0.0.1:3939`
-(override with `OMEGAFETCH_HOST` / `OMEGAFETCH_PORT`).
+By default it binds to `127.0.0.1:3939` (override with `OMEGAFETCH_HOST` /
+`OMEGAFETCH_PORT`).
 
 **2. Expose it to the internet with a tunnel.** OmegaFetch itself only
 speaks plain HTTP on localhost — something else needs to terminate TLS and
 forward traffic in. Two easy options:
 
 ```bash
-# Cloudflare Tunnel (no account changes to your router needed)
+# Cloudflare Tunnel (no router changes needed)
 cloudflared tunnel --url http://127.0.0.1:3939
 
 # or Tailscale Funnel, if you're already on a tailnet
 tailscale funnel 3939
 ```
 
-Whichever URL the tunnel gives you is what you set as `OMEGAFETCH_PUBLIC_URL`
-(restart OmegaFetch if you change it).
+If the tunnel forwards a hostname other than `localhost`/`127.0.0.1` (it
+usually will), add it to `OMEGAFETCH_ALLOWED_HOSTS` (comma-separated) so
+OmegaFetch's DNS-rebinding protection accepts requests for it — e.g.
+`OMEGAFETCH_ALLOWED_HOSTS=omegafetch.yourdomain.com`.
 
-**3. Add it as a connector in the Claude app** (claude.ai/desktop/mobile
-settings → Connectors → Add custom connector), pointing at
-`https://omegafetch.yourdomain.com/mcp`. Claude will walk you through an
-OAuth login — that's the password you set in step 1. Nobody gets a token
-without it, since dynamic client registration is intentionally open (that's
-normal for MCP) but the login screen is the real gate.
+**3. Point your MCP client at `https://<tunnel-host>/mcp`** and configure it
+to send `Authorization: Bearer <the token from step 1>` on every request —
+whatever field your client calls it (custom header, API key, bearer token).
+No further handshake needed: the right token gets straight in, the wrong
+one (or none) gets a 401.
 
 **Security notes, read before exposing this to the internet:**
-- Pick a real password (`OMEGAFETCH_PASSWORD`), not something guessable —
-  it's the only thing standing between a stranger and your browser.
-- Tokens live in memory for 12 hours and reset on restart; there's no
-  refresh-token support on purpose, so a compromised token expires on its own.
-- Anyone who gets a valid token can drive the browser bridge and its
-  cookie jar — treat the URL and password like you would a VPN credential.
+- Generate the token, don't type one — `OMEGAFETCH_TOKEN` is the *only*
+  thing standing between a stranger and your browser bridge.
+- There's no expiry or rotation built in. If the token leaks, restart with
+  a new one — everyone using the old one is immediately locked out.
+- Anyone who has the token can drive the browser bridge and its cookie
+  jar — treat it like a VPN credential, not something you paste into a chat.
 - This is a single-user hobby setup: no rate limiting, no audit log. Don't
-  point it at a profile logged into anything you wouldn't want exposed if
-  the password leaked.
+  point it at a browser profile logged into anything you wouldn't want
+  exposed if the token leaked.
 
 ## Configuration (environment variables)
 
@@ -128,11 +131,11 @@ normal for MCP) but the login screen is the real gate.
 | `OMEGAFETCH_EXECUTABLE_PATH` | — | Path to a Chromium-based browser binary that isn't a Playwright "channel" — e.g. Brave, Vivaldi. Takes priority over `OMEGAFETCH_CHANNEL`. Typical Brave paths: `/usr/bin/brave-browser` (Linux), `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser` (macOS), `C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe` (Windows). |
 | `OMEGAFETCH_USER_AGENT` | *(default Chromium UA)* | Override the browser's user agent string. |
 | `OMEGAFETCH_LOCALE` | `en-US` | Locale the browser reports. |
-| `OMEGAFETCH_TRANSPORT` | `stdio` | Set to `http` to run as a remote OAuth-protected MCP server instead of talking stdio to a local client. See "Use from a phone" above. |
-| `OMEGAFETCH_PASSWORD` | — | Required in `http` mode. The password gating the OAuth login screen. |
-| `OMEGAFETCH_PUBLIC_URL` | — | Required in `http` mode. The public HTTPS URL your tunnel exposes (used as the OAuth issuer). |
+| `OMEGAFETCH_TRANSPORT` | `stdio` | Set to `http` to run as a remote bearer-token-protected MCP server instead of talking stdio to a local client. See "Use from a phone" above. |
+| `OMEGAFETCH_TOKEN` | — | Required in `http` mode. The static bearer token clients must send. |
 | `OMEGAFETCH_HOST` | `127.0.0.1` | `http` mode only — bind address. |
 | `OMEGAFETCH_PORT` | `3939` | `http` mode only — bind port. |
+| `OMEGAFETCH_ALLOWED_HOSTS` | `localhost`, `127.0.0.1` | `http` mode only — comma-separated hostnames to accept (add your tunnel's public hostname). |
 
 ## A note on responsible use
 
