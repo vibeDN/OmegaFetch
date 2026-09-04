@@ -68,6 +68,7 @@ Or add it directly to your MCP config:
 | `OMEGAFETCH_PROFILE_DIR` | `~/.omegafetch/profile` | Where the persistent browser profile (cookies, local storage, logins) is stored. |
 | `OMEGAFETCH_HEADLESS` | `true` | Set to `0`/`false` to run the browser bridge headed — useful if a site still challenges headless Chromium. |
 | `OMEGAFETCH_CHANNEL` | *(bundled Chromium)* | Set to `chrome` to drive your real installed Google Chrome instead of Playwright's bundled Chromium. |
+| `OMEGAFETCH_EXECUTABLE_PATH` | — | Path to a Chromium-based browser binary that isn't a Playwright "channel" — e.g. Brave, Vivaldi. Takes priority over `OMEGAFETCH_CHANNEL`. Typical Brave paths: `/usr/bin/brave-browser` (Linux), `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser` (macOS), `C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe` (Windows). |
 | `OMEGAFETCH_USER_AGENT` | *(default Chromium UA)* | Override the browser's user agent string. |
 | `OMEGAFETCH_LOCALE` | `en-US` | Locale the browser reports. |
 

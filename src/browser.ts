@@ -24,12 +24,27 @@ function isHeadless(): boolean {
  * Persistent so cookies/logins survive across calls — that's what lets the
  * bridge get past auth walls a stateless server-side fetch never could.
  */
+type PersistentContextOptions = NonNullable<Parameters<typeof chromium.launchPersistentContext>[1]>;
+
+/**
+ * Non-Chrome Chromium forks (Brave, Vivaldi, ...) aren't Playwright "channels" —
+ * they're only reachable via an explicit executablePath. If one is set, it wins
+ * over OMEGAFETCH_CHANNEL.
+ */
+function browserLaunchTarget(): Pick<PersistentContextOptions, "channel" | "executablePath"> {
+  const executablePath = process.env.OMEGAFETCH_EXECUTABLE_PATH;
+  if (executablePath) return { executablePath };
+  const channel = process.env.OMEGAFETCH_CHANNEL;
+  if (channel) return { channel };
+  return {};
+}
+
 export async function getBrowserContext(): Promise<BrowserContext> {
   if (!contextPromise) {
     contextPromise = chromium
       .launchPersistentContext(profileDir(), {
         headless: isHeadless(),
-        channel: process.env.OMEGAFETCH_CHANNEL,
+        ...browserLaunchTarget(),
         viewport: { width: 1366, height: 900 },
         userAgent: process.env.OMEGAFETCH_USER_AGENT,
         locale: process.env.OMEGAFETCH_LOCALE ?? "en-US",
